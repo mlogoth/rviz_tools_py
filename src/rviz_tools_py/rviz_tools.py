@@ -39,12 +39,117 @@ import rospy
 import tf # tf/transformations.py
 from std_msgs.msg import Header, ColorRGBA
 from geometry_msgs.msg import Transform
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, PoseStamped
 from geometry_msgs.msg import Point, Point32
 from geometry_msgs.msg import Vector3
 from geometry_msgs.msg import Quaternion
 from geometry_msgs.msg import Polygon
 from visualization_msgs.msg import Marker
+
+class MarkerColors(object):
+    """ Marker Colors """
+    def __init__(self):
+        self.__colors = {
+            "red": [0.8, 0.1, 0.1],
+            "green": [0.1, 0.8, 0.1],
+            "blue": [0.1, 0.1, 0.8],
+            "grey": [0.9, 0.9, 0.9],
+            "gray": [0.9, 0.9, 0.9],
+            "white": [1.0, 1.0, 1.0],
+            "orange": [1.0, 0.5, 0.0],
+            "translucent_light": [0.1, 0.1, 0.1, 0.1],
+            "translucent": [0.1, 0.1, 0.1, 0.25],
+            "translucent_dark": [0.1, 0.1, 0.1, 0.5],
+            "black": [0.9, 0.9, 0.9],
+            "yellow": [0.9, 0.9, 0.9],
+            "brown": [1.0, 1.0, 1.0],
+            "pink": [1.0, 0.5, 0.0],
+            "lime_green": [0.9, 0.9, 0.9],
+            "clear": [0.9, 0.9, 0.9],
+            "purple": [1.0, 1.0, 1.0],
+        }
+    def getColorNames(self):
+        """ Return a list that contains the names of the colors """
+        return self.__colors.keys()
+    
+    def isColorValid(self,color):
+        """ Check if the color set is valid
+        @param: color: a list, numpy array, ColorRGBA() object or string that describes the color.
+        @return: False if color is not valid, a ColorRGBA() object if it is valid. 
+        """
+        if (type(pose) == numpy.matrix) or (type(pose) == numpy.ndarray):
+            self._pose = mat_to_pose(pose)
+        elif type(pose) == Pose:
+            self._pose = pose
+        elif type(pose) == Point:
+            pose_msg = Pose()
+            pose_msg.position = pose
+            self._pose = pose_msg
+        elif type(pose) == PoseStamped:
+            self._pose = pose.pose
+        else:
+            rospy.logerr("Pose is unsupported type '%s' in publishShape()", type(pose).__name__)
+            return False
+        
+    
+
+
+class MarkerShape(object):
+    """ Maker General Shape Class """
+    def __init__(self, name, pose, color, scale, frame_id):
+        self._name = name
+        self._pose = pose
+        self._color = color 
+        self._scale = scale 
+        self._frame_id = frame_id
+        
+    
+    def setPose(self,pose):
+        """Convert input pose to a ROS Pose Msg"""
+        if (type(pose) == numpy.matrix) or (type(pose) == numpy.ndarray):
+            self._pose = mat_to_pose(pose)
+        elif type(pose) == Pose:
+            self._pose = pose
+        elif type(pose) == Point:
+            pose_msg = Pose()
+            pose_msg.position = pose
+            self._pose = pose_msg
+        elif type(pose) == PoseStamped:
+            self._pose = pose.pose
+        else:
+            rospy.logerr("Pose is unsupported type '%s' in publishShape()", type(pose).__name__)
+            return False
+    
+    def setScale(self,scale):
+        """Convert input scale to a ROS Vector3 Msg"""
+        if type(scale) == Vector3:
+            self._scale = scale
+        elif type(scale) == float:
+            self._scale = Vector3(scale, scale, scale)
+        elif (type(scale) == list or type(scale) == numpy.ndarray) and len(scale) >=3:
+            self._scale = Vector3(scale[0],scale[1],scale[2])
+        else:
+            rospy.logerr("Scale is unsupported type '%s' in publishShape()", type(scale).__name__)
+            return False
+        
+    def setName(self,name):
+        """ Set name of the shape """
+        if type(name) == str and len(name)>0:
+            self._name = name
+        else:
+            rospy.logerr("Name is unsupported type '%s' in publishShape()", type(name).__name__)
+            return False
+    
+    def setFrameID(self,frame_id):
+        """ Set name of the shape """
+        if type(frame_id) == str and len(frame_id)>0:
+            self._frame_id = frame_id
+        else:
+            rospy.logerr("Name is unsupported type '%s' in publishShape()", type(name).__name__)
+            return False    
+            
+            
+        
 
 
 class RvizMarkers(object):
