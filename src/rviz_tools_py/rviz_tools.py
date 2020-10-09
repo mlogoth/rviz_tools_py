@@ -46,6 +46,22 @@ from geometry_msgs.msg import Quaternion
 from geometry_msgs.msg import Polygon
 from visualization_msgs.msg import Marker
 
+
+class MarkerActions:
+    def _init__(self):
+        self.ADD = Marker().ADD
+        self.MODIFY = Marker().MODIFY
+        self.DELETE = Marker().DELETE
+        self.DELETEALL = Marker().DELETEALL
+    def getValidActions(self):
+        return [self.ADD,self.MODIFY,self.DELETE,self.DELETEALL]
+    def isValid(self,action):
+        if action in self.getValidActions():
+            return True
+        else:
+            return False
+        
+
 class MarkerColors(object):
     """ Marker Colors """
     def __init__(self):
@@ -77,31 +93,41 @@ class MarkerColors(object):
         @param: color: a list, numpy array, ColorRGBA() object or string that describes the color.
         @return: False if color is not valid, a ColorRGBA() object if it is valid. 
         """
-        if (type(pose) == numpy.matrix) or (type(pose) == numpy.ndarray):
-            self._pose = mat_to_pose(pose)
-        elif type(pose) == Pose:
-            self._pose = pose
-        elif type(pose) == Point:
-            pose_msg = Pose()
-            pose_msg.position = pose
-            self._pose = pose_msg
-        elif type(pose) == PoseStamped:
-            self._pose = pose.pose
+        if type(color) == str and len(color)>0:
+            color = color.lower()
+            if (color in self.getColorNames()):
+                return self.isColorValid(self.__colors[color])
+            else:
+                rospy.logerr("RViz Marker Color defined is not in list.")
+        elif isinstance(color,(list,numpy.ndarray,numpy.matrix)) and 2<len(color)<5:
+            result = ColorRGBA()
+            result.a = 1.0
+            result.r = float(color[0])
+            result.g = float(color[1])
+            result.b = float(color[2])
+            if len(color) == 4:
+                result.a = float(color[3])
+            return result
         else:
             rospy.logerr("Pose is unsupported type '%s' in publishShape()", type(pose).__name__)
             return False
-        
+    
     
 
 
 class MarkerShape(object):
     """ Maker General Shape Class """
-    def __init__(self, name, pose, color, scale, frame_id):
-        self._name = name
-        self._pose = pose
-        self._color = color 
-        self._scale = scale 
-        self._frame_id = frame_id
+    def __init__(self, name, pose, color, scale, frame_id,action,id_=0,topic_to_publish=""):
+        self._colors_module = MarkerColors()
+        self._name = "example_shape"
+        self._pose = Pose()
+        self._color = self.setColor(color) 
+        self._scale = Vector3(x=1.0,y=1.0,z=1.0)
+        self._frame_id = "world"
+        self._action = MarkerActions().ADD
+        self._id = 0
+        if (all([self.setName(name), self.setPose(pose), self.setAction(action), self.setScale(scale), self.setFrameID(frame_id), self.setID(id_)])):
+            print("Marker Shape Initialization Complete without errors!")
         
     
     def setPose(self,pose):
@@ -117,7 +143,7 @@ class MarkerShape(object):
         elif type(pose) == PoseStamped:
             self._pose = pose.pose
         else:
-            rospy.logerr("Pose is unsupported type '%s' in publishShape()", type(pose).__name__)
+            rospy.logerr("Pose is unsupported type '%s' in setPose()", type(pose).__name__)
             return False
     
     def setScale(self,scale):
@@ -129,7 +155,7 @@ class MarkerShape(object):
         elif (type(scale) == list or type(scale) == numpy.ndarray) and len(scale) >=3:
             self._scale = Vector3(scale[0],scale[1],scale[2])
         else:
-            rospy.logerr("Scale is unsupported type '%s' in publishShape()", type(scale).__name__)
+            rospy.logerr("Scale is unsupported type '%s' in setScale()", type(scale).__name__)
             return False
         
     def setName(self,name):
@@ -137,7 +163,7 @@ class MarkerShape(object):
         if type(name) == str and len(name)>0:
             self._name = name
         else:
-            rospy.logerr("Name is unsupported type '%s' in publishShape()", type(name).__name__)
+            rospy.logerr("Name is unsupported type '%s' in setName()", type(name).__name__)
             return False
     
     def setFrameID(self,frame_id):
@@ -145,12 +171,314 @@ class MarkerShape(object):
         if type(frame_id) == str and len(frame_id)>0:
             self._frame_id = frame_id
         else:
-            rospy.logerr("Name is unsupported type '%s' in publishShape()", type(name).__name__)
-            return False    
+            rospy.logerr("Name is unsupported type '%s' in setFrameID()", type(frame_id).__name__)
+            return False
+    
+    def setAction(self,action):
+        """Set Marker Action"""
+        if (MarkerActions().isValid(action)):
+            self._action = action
+        else:
+            rospy.logerr("Action is unsupported type '%s' in setAction()", type(action).__name__)
+            return False
+    
+    def setColor(self,color):
+        """ Set color of the shape """
+        return self._colors_module.isColorValid(color)
+    
+    def setID(self,id_):
+        """ Set unique marker id number"""
+        if type(id_) == int :
+            self._id = id_
+        else:
+            rospy.logerr("ID is unsupported type '%s' in setID()", type(id_).__name__)
+            return False
+    
+           
             
-            
+class Cylinder(MarkerShape):
+    def __init__(self,name,frame_id,pose,scale,color,action,life_time=rospy.Duration(0.0)):
+        MarkerShape.__init__(self,name,pose,color,scale,frame_id,action)
+        self.__marker = Marker()
+        self.__marker.type = Marker().CYLINDER
+        self._life_time = rospy.Duration(0.0)
+        self.setLifeTime(life_time)
+        self.__marker.header.frame_id = self._frame_id
+        self.__marker.header.time =rospy.Time.now()
+    
+    def getMarker(self):
+        """ Returns a Rviz Marker Object with parameters set """ 
+        self.__marker.ns = self._name
+        self.__marker.id = self._id
+        self.__marker.action = self._action
+        self.__marker.pose = self._pose
+        self.__marker.scale = self._scale
+        self.__marker.color = self._color
+        self.__marker.lifetime = self._life_time
+        self.__marker.header.frame_id = self._frame_id
+        self.__marker.header.time =rospy.Time.now()
+        return self.__marker
+    
+    def setRemove(self):
+        self.__marker.action = Marker().DELETE
+    
+    def setLifeTime(self,time):
+        if (isinstance(type,(int,float))):
+            self._life_time = rospy.Duration(time)
+        elif(isinstance(type,(rospy.Duration))):
+            self._life_time = time
+        else:
+            rospy.logerr("Life time is unsupported type '%s' in setLifeTime()", type(time).__name__)
+            return False
+    
+    
+class Cube(MarkerShape):
+    def __init__(self,name,frame_id,pose,scale,color,action,life_time=rospy.Duration(0.0)):
+        MarkerShape.__init__(self,name,pose,color,scale,frame_id,action)
+        self.__marker = Marker()
+        self.__marker.type = Marker().CUBE
+        self._life_time = rospy.Duration(0.0)
+        self.setLifeTime(life_time)
+        self.__marker.header.frame_id = self._frame_id
+        self.__marker.header.time =rospy.Time.now()
+    
+    def getMarker(self):
+        """ Returns a Rviz Marker Object with parameters set """ 
+        self.__marker.ns = self._name
+        self.__marker.id = self._id
+        self.__marker.action = self._action
+        self.__marker.pose = self._pose
+        self.__marker.scale = self._scale
+        self.__marker.color = self._color
+        self.__marker.lifetime = self._life_time
+        self.__marker.header.frame_id = self._frame_id
+        self.__marker.header.time =rospy.Time.now()
+        return self.__marker
+    
+    def setRemove(self):
+        self.__marker.action = Marker().DELETE
+    
+    def setLifeTime(self,time):
+        if (isinstance(type,(int,float))):
+            self._life_time = rospy.Duration(time)
+        elif(isinstance(type,(rospy.Duration))):
+            self._life_time = time
+        else:
+            rospy.logerr("Life time is unsupported type '%s' in setLifeTime()", type(time).__name__)
+            return False
         
+        
+        
+class Sphere(MarkerShape):
+    def __init__(self,name,frame_id,pose,scale,color,action,life_time=rospy.Duration(0.0)):
+        MarkerShape.__init__(self,name,pose,color,scale,frame_id,action)
+        self.__marker = Marker()
+        self.__marker.type = Marker().SPHERE
+        self._life_time = rospy.Duration(0.0)
+        self.setLifeTime(life_time)
+    
+    def getMarker(self):
+        """ Returns a Rviz Marker Object with parameters set """ 
+        self.__marker.ns = self._name
+        self.__marker.id = self._id
+        self.__marker.action = self._action
+        self.__marker.pose = self._pose
+        self.__marker.scale = self._scale
+        self.__marker.color = self._color
+        self.__marker.lifetime = self._life_time
+        self.__marker.header.frame_id = self._frame_id
+        self.__marker.header.time =rospy.Time.now()
+        return self.__marker
+    
+    def setRemove(self):
+        self.__marker.action = Marker().DELETE
+    
+    def setLifeTime(self,time):
+        if (isinstance(type,(int,float))):
+            self._life_time = rospy.Duration(time)
+        elif(isinstance(type,(rospy.Duration))):
+            self._life_time = time
+        else:
+            rospy.logerr("Life time is unsupported type '%s' in setLifeTime()", type(time).__name__)
+            return False
 
+
+class Arrow(MarkerShape):
+    def __init__(self,name,frame_id,pose,scale,color,action,life_time=rospy.Duration(0.0)):
+        MarkerShape.__init__(self,name,pose,color,scale,frame_id,action)
+        self.__marker = Marker()
+        self.__marker.type = Marker().ARROW
+        self._life_time = rospy.Duration(0.0)
+        self.setLifeTime(life_time)
+    
+    def getMarker(self):
+        """ Returns a Rviz Marker Object with parameters set """ 
+        self.__marker.ns = self._name
+        self.__marker.id = self._id
+        self.__marker.action = self._action
+        self.__marker.pose = self._pose
+        self.__marker.scale = self._scale
+        self.__marker.color = self._color
+        self.__marker.lifetime = self._life_time
+        self.__marker.header.frame_id = self._frame_id
+        self.__marker.header.time =rospy.Time.now()
+        return self.__marker
+    def setRemove(self):
+        self.__marker.action = Marker().DELETE
+        
+    def setLifeTime(self,time):
+        if (isinstance(type,(int,float))):
+            self._life_time = rospy.Duration(time)
+        elif(isinstance(type,(rospy.Duration))):
+            self._life_time = time
+        else:
+            rospy.logerr("Life time is unsupported type '%s' in setLifeTime()", type(time).__name__)
+            return False
+
+
+
+class LineStrip(MarkerShape):
+    def __init__(self,name,frame_id,pose,scale,color,action,life_time=rospy.Duration(0.0)):
+        MarkerShape.__init__(self,name,pose,color,scale,frame_id,action)
+        self.__marker = Marker()
+        self.__marker.type = Marker().ARROW
+        self._life_time = rospy.Duration(0.0)
+        self.setLifeTime(life_time)
+    
+    def getMarker(self):
+        """ Returns a Rviz Marker Object with parameters set """ 
+        self.__marker.ns = self._name
+        self.__marker.id = self._id
+        self.__marker.action = self._action
+        self.__marker.pose = self._pose
+        self.__marker.scale = self._scale
+        self.__marker.color = self._color
+        self.__marker.lifetime = self._life_time
+        self.__marker.header.frame_id = self._frame_id
+        self.__marker.header.time =rospy.Time.now()
+        if(len(self.__marker.points)==2):
+            return self.__marker
+        else:
+            rospy.logerr("LineStrip should consists of two points. LineStrip points.size()= %s",str(len(self.__marker.points)))
+            return False
+    
+    def addLinePoint(self,point):
+        # Convert input points to ROS Point Msgs
+        if type(point) == Point:
+            self.__marker.points.append(point)
+        elif type(point) == Pose:
+            position = point.position
+            self.__marker.points.append(Point(position.x, position.y, position.z))
+        elif (type(point) == numpy.matrix) or (type(point) == numpy.ndarray):
+            pose = mat_to_pose(point)
+            position = pose.position
+            self.__marker.points.append(Point(position.x, position.y, position.z))
+        else:
+            rospy.logerr("Point for line unsupported type '%s' in addLinePoint()", type(point).__name__)
+            return False
+    def setRemove(self):
+        self.__marker.action = Marker().DELETE
+        
+    def setLineWidth(self,value):
+        self.setScale(value)
+    
+    def clearLinePoints(self):
+        self.__marker.points[:] = []
+    
+    def popLinePoint(self):
+        return self.__marker.points.pop()
+    
+    def setLifeTime(self,time):
+        if (isinstance(type,(int,float))):
+            self._life_time = rospy.Duration(time)
+        elif(isinstance(type,(rospy.Duration))):
+            self._life_time = time
+        else:
+            rospy.logerr("Life time is unsupported type '%s' in setLifeTime()", type(time).__name__)
+            return False
+
+
+class LineList(MarkerShape):
+    def __init__(self,name,frame_id,pose,scale,color,action,life_time=rospy.Duration(0.0)):
+        MarkerShape.__init__(self,name,pose,color,scale,frame_id,action)
+        self.__marker = Marker()
+        self.__marker.type = Marker().LINE_LIST
+        self._life_time = rospy.Duration(0.0)
+        self.setLifeTime(life_time)
+    
+    def getMarker(self):
+        """ Returns a Rviz Marker Object with parameters set """ 
+        self.__marker.ns = self._name
+        self.__marker.id = self._id
+        self.__marker.action = self._action
+        self.__marker.pose = self._pose
+        self.__marker.scale = self._scale
+        self.__marker.color = self._color
+        self.__marker.lifetime = self._life_time
+        self.__marker.header.frame_id = self._frame_id
+        self.__marker.header.time =rospy.Time.now()
+        if(len(self.__marker.points)>=2):
+            return self.__marker
+        else:
+            rospy.logerr("LineList should consist of more than two points. LineStrip points.size()= %s",str(len(self.__marker.points)))
+            return False
+    
+    def addLinePoint(self,point,color):
+        # Convert input points to ROS Point Msgs
+        self.setColor(color)
+        if type(point) == Point:
+            self.__marker.points.append(point)
+            self.__marker.colors.append(self._color)
+        elif type(point) == Pose:
+            position = point.position
+            self.__marker.points.append(Point(position.x, position.y, position.z))
+            self.__marker.colors.append(self._color)
+        elif (type(point) == numpy.matrix) or (type(point) == numpy.ndarray):
+            pose = mat_to_pose(point)
+            position = pose.position
+            self.__marker.points.append(Point(position.x, position.y, position.z))
+            self.__marker.colors.append(self._color)
+        else:
+            rospy.logerr("Point for line unsupported type '%s' in addLinePoint()", type(point).__name__)
+            return False
+    
+    def setPath(self,path,color):
+        """ Add a path : Array/List of points that represent a path"""
+        # Check input
+        if type(path) != list or len(path)<=1:
+            rospy.logerr("Path is unsupported type '%s' in publishPath()", type(path).__name__)
+            return False
+        individual_color = False
+        if (len(color)==len(path)):
+            individual_color = True
+        
+        for idx,point in enumerate(path):
+            if individual_color :
+                self.addLinePoint(point,color[idx])
+            else:
+                self.addLinePoint(point,color)
+    
+    def setRemove(self):
+        self.__marker.action = Marker().DELETE     
+    
+    def setLineWidth(self,value):
+        self.setScale(value)
+    
+    def clearLinePoints(self):
+        self.__marker.points[:] = []
+        self.__marker.colors[:] = []
+    
+    def popLinePoint(self):
+        return (self.__marker.points.pop(),self.__marker.colors.pop())
+    
+    def setLifeTime(self,time):
+        if (isinstance(type,(int,float))):
+            self._life_time = rospy.Duration(time)
+        elif(isinstance(type,(rospy.Duration))):
+            self._life_time = time
+        else:
+            rospy.logerr("Life time is unsupported type '%s' in setLifeTime()", type(time).__name__)
+            return False
 
 class RvizMarkers(object):
     """
@@ -160,10 +488,8 @@ class RvizMarkers(object):
     def __init__(self, base_frame, marker_topic, wait_time=None):
         self.base_frame = base_frame
         self.marker_topic = marker_topic
-
         # Set the default Marker parameters
         self.setDefaultMarkerParams()
-
         # Create the Rviz Marker Publisher
         self.loadMarkerPublisher(wait_time)
 
